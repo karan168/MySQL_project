@@ -1,0 +1,150 @@
+-- SAFE DROP (optional)
+BEGIN
+  FOR rec IN (
+    SELECT object_name, object_type
+    FROM user_objects
+    WHERE object_name IN (
+      'SALES','PRODUCTS','CUSTOMERS',
+      'UPDATE_STOCK','MONTHLY_SALES_REPORT','GET_DISCOUNT',
+      'SEQ_CUSTOMER','SEQ_PRODUCT','SEQ_SALES'
+    )
+  )
+  LOOP
+    BEGIN
+      IF rec.object_type = 'TABLE' THEN
+        EXECUTE IMMEDIATE 'DROP TABLE ' || rec.object_name || ' CASCADE CONSTRAINTS';
+      ELSIF rec.object_type = 'TRIGGER' THEN
+        EXECUTE IMMEDIATE 'DROP TRIGGER ' || rec.object_name;
+      ELSIF rec.object_type IN ('PROCEDURE','FUNCTION') THEN
+        EXECUTE IMMEDIATE 'DROP ' || rec.object_type || ' ' || rec.object_name;
+      ELSIF rec.object_type = 'SEQUENCE' THEN
+        EXECUTE IMMEDIATE 'DROP SEQUENCE ' || rec.object_name;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END LOOP;
+END;
+/
+
+SET SERVEROUTPUT ON SIZE 1000000;
+
+-- Create tables
+CREATE TABLE CUSTOMERS (
+    customer_id NUMBER PRIMARY KEY,
+    name VARCHAR2(50),
+    city VARCHAR2(50),
+    age NUMBER,
+    gender VARCHAR2(10)
+);
+
+CREATE TABLE PRODUCTS (
+    product_id NUMBER PRIMARY KEY,
+    product_name VARCHAR2(50),
+    category VARCHAR2(30),
+    price NUMBER(10,2),
+    stock NUMBER
+);
+
+CREATE TABLE SALES (
+    sale_id NUMBER PRIMARY KEY,
+    customer_id NUMBER REFERENCES CUSTOMERS(customer_id),
+    product_id NUMBER REFERENCES PRODUCTS(product_id),
+    quantity NUMBER,
+    sale_date DATE
+);
+
+-- Optional sequences
+CREATE SEQUENCE seq_customer START WITH 5 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE seq_product  START WITH 105 INCREMENT BY 1 NOCACHE NOCYCLE;
+CREATE SEQUENCE seq_sale     START WITH 1007 INCREMENT BY 1 NOCACHE NOCYCLE;
+
+-- Safer trigger (recommended)
+CREATE OR REPLACE TRIGGER update_stock
+BEFORE INSERT ON SALES
+FOR EACH ROW
+DECLARE
+    v_stock PRODUCTS.stock%TYPE;
+BEGIN
+    SELECT stock INTO v_stock FROM PRODUCTS WHERE product_id = :NEW.product_id FOR UPDATE;
+    IF v_stock < :NEW.quantity THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Insufficient stock for product ' || :NEW.product_id);
+    END IF;
+    UPDATE PRODUCTS SET stock = stock - :NEW.quantity WHERE product_id = :NEW.product_id;
+END;
+/
+
+-- Insert data
+INSERT INTO CUSTOMERS VALUES (1, 'Amit Sharma', 'Pune', 28, 'Male');
+INSERT INTO CUSTOMERS VALUES (2, 'Neha Gupta', 'Mumbai', 32, 'Female');
+INSERT INTO CUSTOMERS VALUES (3, 'Rahul Jain', 'Delhi', 40, 'Male');
+INSERT INTO CUSTOMERS VALUES (4, 'Sneha Rao', 'Bangalore', 25, 'Female');
+
+INSERT INTO PRODUCTS VALUES (101, 'Laptop', 'Electronics', 55000, 20);
+INSERT INTO PRODUCTS VALUES (102, 'Mobile', 'Electronics', 20000, 50);
+INSERT INTO PRODUCTS VALUES (103, 'Headphones', 'Accessories', 3000, 100);
+INSERT INTO PRODUCTS VALUES (104, 'Smartwatch', 'Accessories', 7000, 30);
+
+INSERT INTO SALES VALUES (1001, 1, 101, 1, DATE '2025-01-12');
+INSERT INTO SALES VALUES (1002, 2, 102, 2, DATE '2025-02-05');
+INSERT INTO SALES VALUES (1003, 3, 103, 3, DATE '2025-02-15');
+INSERT INTO SALES VALUES (1004, 4, 104, 1, DATE '2025-03-10');
+INSERT INTO SALES VALUES (1005, 1, 102, 1, DATE '2025-03-20');
+INSERT INTO SALES VALUES (1006, 2, 101, 1, DATE '2025-04-05');
+
+COMMIT;
+
+-- Analytical query example:
+SELECT p.product_name, SUM(s.quantity) AS total_sold
+FROM SALES s
+JOIN PRODUCTS p ON s.product_id = p.product_id
+GROUP BY p.product_name
+ORDER BY total_sold DESC;
+
+-- Procedure
+CREATE OR REPLACE PROCEDURE monthly_sales_report (p_month VARCHAR2) IS
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Sales Report for Month: ' || p_month);
+    FOR rec IN (
+        SELECT p.product_name, SUM(s.quantity) AS total_sold,
+               SUM(s.quantity * p.price) AS revenue
+        FROM SALES s
+        JOIN PRODUCTS p ON s.product_id = p.product_id
+        WHERE TO_CHAR(s.sale_date, 'YYYY-MM') = p_month
+        GROUP BY p.product_name
+    )
+    LOOP
+        DBMS_OUTPUT.PUT_LINE('Product: ' || rec.product_name ||
+                             ' | Sold: ' || rec.total_sold ||
+                             ' | Revenue: ' || rec.revenue);
+    END LOOP;
+END;
+/
+
+-- Function
+CREATE OR REPLACE FUNCTION get_discount (p_customer_id NUMBER)
+RETURN NUMBER IS
+    total_spent NUMBER;
+BEGIN
+    SELECT SUM(s.quantity * p.price)
+    INTO total_spent
+    FROM SALES s
+    JOIN PRODUCTS p ON s.product_id = p.product_id
+    WHERE s.customer_id = p_customer_id;
+
+    IF NVL(total_spent,0) > 50000 THEN
+        RETURN 0.10;
+    ELSE
+        RETURN 0.0;
+    END IF;
+END;
+/
+
+-- Example runs:
+BEGIN
+  monthly_sales_report('2025-03');
+END;
+/
+
+SELECT c.name, get_discount(c.customer_id) AS discount_rate FROM CUSTOMERS c;
+
