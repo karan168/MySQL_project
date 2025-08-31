@@ -1,4 +1,4 @@
--- SAFE DROP (optional)
+-- SAFE DROP 
 BEGIN
   FOR rec IN (
     SELECT object_name, object_type
@@ -59,7 +59,7 @@ CREATE SEQUENCE seq_customer START WITH 5 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE seq_product  START WITH 105 INCREMENT BY 1 NOCACHE NOCYCLE;
 CREATE SEQUENCE seq_sale     START WITH 1007 INCREMENT BY 1 NOCACHE NOCYCLE;
 
--- Safer trigger (recommended)
+-- Safer trigger
 CREATE OR REPLACE TRIGGER update_stock
 BEFORE INSERT ON SALES
 FOR EACH ROW
@@ -94,7 +94,7 @@ INSERT INTO SALES VALUES (1006, 2, 101, 1, DATE '2025-04-05');
 
 COMMIT;
 
--- Analytical query example:
+-- Analytical query 
 SELECT p.product_name, SUM(s.quantity) AS total_sold
 FROM SALES s
 JOIN PRODUCTS p ON s.product_id = p.product_id
@@ -140,11 +140,10 @@ BEGIN
 END;
 /
 
--- Example runs:
+-- Execute
 BEGIN
   monthly_sales_report('2025-03');
 END;
 /
 
 SELECT c.name, get_discount(c.customer_id) AS discount_rate FROM CUSTOMERS c;
-
