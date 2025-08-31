@@ -1,4 +1,4 @@
-# MySQL_project
+# MySQL_project and Oracle PL project
 
 Part-I:- This project focuses on data cleaning and preprocessing of a dataset containing company layoff information. The dataset includes details such as company name, location, industry, number of employees laid off, percentage laid off, date, stage of funding, country, and funds raised.
 The objective was to clean, standardize, and prepare the dataset for further analysis by ensuring consistency, accuracy, and reliability of the information.
